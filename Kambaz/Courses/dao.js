@@ -1,30 +1,35 @@
-import Database from "../Database/index.js";
 import { v4 as uuidv4 } from "uuid";
+import model from "./model.js";
+import enrollmentModel from "../Enrollments/model.js";
+
 
 export function findAllCourses() {
-  return Database.courses;
+  return model.find();
 }
-export function findCoursesForEnrolledUser(userId) {
-  const { courses, enrollments } = Database;
-  const enrolledCourses = courses.filter((course) =>
-    enrollments.some((enrollment) => enrollment.user === userId && enrollment.course === course._id));
-  return enrolledCourses;
+export async function findCoursesForEnrolledUser(userId) {
+  try {
+    // 获取用户的所有enrollments
+    const enrollments = await enrollmentModel.find({ user: userId });
+    
+    // 提取course IDs
+    const courseIds = enrollments.map(enrollment => enrollment.course);
+    
+    // 根据course IDs查找完整的课程信息
+    const courses = await model.find({ _id: { $in: courseIds } });
+    
+    return courses;
+  } catch (error) {
+    console.error("Error finding courses for enrolled user:", error);
+    throw error;
+  }
 }
 export function createCourse(course) {
   const newCourse = { ...course, _id: uuidv4() };
-  Database.courses = [...Database.courses, newCourse];
-  return newCourse;
+  return model.create(newCourse);
 }
 export function deleteCourse(courseId) {
-  const { courses, enrollments } = Database;
-  Database.courses = courses.filter((course) => course._id !== courseId);
-  Database.enrollments = enrollments.filter(
-    (enrollment) => enrollment.course !== courseId
-  );
+  return model.deleteOne({ _id: courseId });
 }
 export function updateCourse(courseId, courseUpdates) {
-  const { courses } = Database;
-  const course = courses.find((course) => course._id === courseId);
-  Object.assign(course, courseUpdates);
-  return course;
+  return model.updateOne({ _id: courseId }, { $set: courseUpdates });
 }

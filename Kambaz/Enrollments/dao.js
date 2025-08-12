@@ -1,58 +1,68 @@
-import Database from "../Database/index.js";
-import { v4 as uuidv4 } from "uuid";
+import model from "./model.js";
 
 export function findAllEnrollments() {
-  return Database.enrollments;
+  return model.find();
 }
 
 export function findEnrollmentsForUser(userId) {
-  return Database.enrollments.filter((enrollment) => enrollment.user === userId);
+  return model.find({ user: userId });
 }
 
 export function findEnrollmentsForCourse(courseId) {
-  return Database.enrollments.filter((enrollment) => enrollment.course === courseId);
+  return model.find({ course: courseId });
 }
 
 export function findEnrollmentById(enrollmentId) {
-  return Database.enrollments.find((enrollment) => enrollment._id === enrollmentId);
+  return model.findById(enrollmentId);
 }
 
 export function findEnrollmentByUserAndCourse(userId, courseId) {
-  return Database.enrollments.find((enrollment) => 
-    enrollment.user === userId && enrollment.course === courseId
-  );
+  return model.findOne({ user: userId, course: courseId });
 }
 
-export function enrollUserInCourse(userId, courseId) {
-  const existingEnrollment = findEnrollmentByUserAndCourse(userId, courseId);
-  if (existingEnrollment) {
-    return existingEnrollment;
+export async function enrollUserInCourse(userId, courseId) {
+  try {
+    const existingEnrollment = await findEnrollmentByUserAndCourse(userId, courseId);
+    if (existingEnrollment) {
+      // 如果enrollment已存在且状态为ACTIVE，直接返回
+      if (existingEnrollment.status === "ACTIVE") {
+        return existingEnrollment;
+      }
+      // 如果enrollment存在但状态不是ACTIVE，更新状态为ACTIVE
+      existingEnrollment.status = "ACTIVE";
+      existingEnrollment.enrollmentDate = new Date();
+      return await existingEnrollment.save();
+    }
+    
+    // 创建新的enrollment
+    const newEnrollment = {
+      _id: `${userId}_${courseId}`,
+      user: userId,
+      course: courseId,
+      enrollmentDate: new Date(),
+      status: "ACTIVE"
+    };
+    
+    return await model.create(newEnrollment);
+  } catch (error) {
+    console.error("Error enrolling user in course:", error);
+    throw error;
   }
-  
-  const newEnrollment = {
-    _id: uuidv4(),
-    user: userId,
-    course: courseId
-  };
-  
-  Database.enrollments.push(newEnrollment);
-  return newEnrollment;
 }
 
-export function unenrollUserFromCourse(userId, courseId) {
-  const enrollment = findEnrollmentByUserAndCourse(userId, courseId);
-  if (enrollment) {
-    Database.enrollments = Database.enrollments.filter(
-      (e) => !(e.user === userId && e.course === courseId)
-    );
-    return { success: true };
+export async function unenrollUserFromCourse(userId, courseId) {
+  try {
+    const result = await model.deleteOne({ user: userId, course: courseId });
+    if (result.deletedCount > 0) {
+      return { success: true, message: "Successfully unenrolled from course" };
+    }
+    return { success: false, error: "Enrollment not found" };
+  } catch (error) {
+    console.error("Error unenrolling user from course:", error);
+    throw error;
   }
-  return { success: false, error: "Enrollment not found" };
 }
 
 export function deleteEnrollment(enrollmentId) {
-  Database.enrollments = Database.enrollments.filter(
-    (enrollment) => enrollment._id !== enrollmentId
-  );
-  return { success: true };
+  return model.deleteOne({ _id: enrollmentId });
 }
